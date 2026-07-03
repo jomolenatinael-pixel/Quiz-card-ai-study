@@ -3,9 +3,13 @@ package com.example.ui.screens
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +32,8 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -43,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,6 +58,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -76,6 +84,60 @@ fun AdminPortalScreen(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
     var exportedJsonText by remember { mutableStateOf("") }
+
+    val developerPhotoBase64 by viewModel.developerPhotoBase64.collectAsState()
+    val developerBitmap = remember(developerPhotoBase64) {
+        if (developerPhotoBase64.isNotEmpty()) {
+            try {
+                val decodedString = android.util.Base64.decode(developerPhotoBase64, android.util.Base64.DEFAULT)
+                android.graphics.BitmapFactory.decodeByteArray(decodedString, 0, decodedString.size)
+            } catch (e: Exception) {
+                null
+            }
+        } else {
+            null
+        }
+    }
+
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { selectedUri ->
+            try {
+                val inputStream = context.contentResolver.openInputStream(selectedUri)
+                val bytes = inputStream?.readBytes()
+                if (bytes != null) {
+                    val options = android.graphics.BitmapFactory.Options().apply {
+                        inJustDecodeBounds = false
+                    }
+                    val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+                    if (bitmap != null) {
+                        val scaledBitmap = if (bitmap.width > 500 || bitmap.height > 500) {
+                            val scale = minOf(500f / bitmap.width, 500f / bitmap.height)
+                            android.graphics.Bitmap.createScaledBitmap(
+                                bitmap,
+                                (bitmap.width * scale).toInt(),
+                                (bitmap.height * scale).toInt(),
+                                true
+                            )
+                        } else {
+                            bitmap
+                        }
+                        val outputStream = java.io.ByteArrayOutputStream()
+                        scaledBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, outputStream)
+                        val compressedBytes = outputStream.toByteArray()
+                        val base64String = android.util.Base64.encodeToString(compressedBytes, android.util.Base64.DEFAULT)
+                        viewModel.saveDeveloperPhoto(base64String)
+                        Toast.makeText(context, "Developer photo updated successfully!", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Could not decode selected image.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error loading image: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -110,12 +172,55 @@ fun AdminPortalScreen(
                     .border(3.dp, MaterialTheme.colorScheme.primary, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Image(
-                    painter = painterResource(id = R.drawable.img_natinael),
-                    contentDescription = "Natinael Jomole Profile Photo",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
+                if (developerBitmap != null) {
+                    Image(
+                        bitmap = developerBitmap.asImageBitmap(),
+                        contentDescription = "Natinael Jomole Profile Photo",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Image(
+                        painter = painterResource(id = R.drawable.img_natinael),
+                        contentDescription = "Natinael Jomole Default Profile Photo",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // --- Dynamic Upload & Reset Buttons ---
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = { launcher.launch("image/*") },
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.testTag("upload_dev_photo_button")
+                ) {
+                    Icon(imageVector = Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Upload Photo", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+
+                if (developerPhotoBase64.isNotEmpty()) {
+                    IconButton(
+                        onClick = {
+                            viewModel.clearDeveloperPhoto()
+                            Toast.makeText(context, "Developer photo reset to default.", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.testTag("reset_dev_photo_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Reset Photo",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -129,7 +234,7 @@ fun AdminPortalScreen(
             )
 
             Text(
-                text = "Senior Mobile Architect & Developer",
+                text = "Lead Developer & Architect",
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.primary

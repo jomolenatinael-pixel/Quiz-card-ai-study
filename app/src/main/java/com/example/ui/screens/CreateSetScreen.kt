@@ -85,8 +85,13 @@ fun CreateSetScreen(
         contract = ActivityResultContracts.OpenDocument(),
         onResult = { uri ->
             if (uri != null) {
-                pdfUri = uri
-                pdfFileName = getFileNameHelper(context, uri)
+                val size = getFileSizeHelper(context, uri)
+                if (size > 20 * 1024 * 1024) {
+                    android.widget.Toast.makeText(context, "File exceeds the 20MB limit. Please select a smaller PDF.", android.widget.Toast.LENGTH_LONG).show()
+                } else {
+                    pdfUri = uri
+                    pdfFileName = getFileNameHelper(context, uri)
+                }
             }
         }
     )
@@ -428,4 +433,22 @@ private fun getFileNameHelper(context: Context, uri: Uri): String {
         }
     }
     return result ?: "StudyDocument.pdf"
+}
+
+private fun getFileSizeHelper(context: Context, uri: Uri): Long {
+    var result: Long = 0
+    if (uri.scheme == "content") {
+        val cursor = context.contentResolver.query(uri, null, null, null, null)
+        try {
+            if (cursor != null && cursor.moveToFirst()) {
+                val index = cursor.getColumnIndex(OpenableColumns.SIZE)
+                if (index != -1) {
+                    result = cursor.getLong(index)
+                }
+            }
+        } finally {
+            cursor?.close()
+        }
+    }
+    return result
 }

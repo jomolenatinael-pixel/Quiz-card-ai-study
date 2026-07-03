@@ -95,6 +95,19 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
     private val _userApiKey = MutableStateFlow(sharedPrefs.getString("gemini_api_key", "") ?: "")
     val userApiKey: StateFlow<String> = _userApiKey.asStateFlow()
 
+    private val _developerPhotoBase64 = MutableStateFlow(sharedPrefs.getString("developer_photo_base64", "") ?: "")
+    val developerPhotoBase64: StateFlow<String> = _developerPhotoBase64.asStateFlow()
+
+    fun saveDeveloperPhoto(base64: String) {
+        _developerPhotoBase64.value = base64
+        sharedPrefs.edit().putString("developer_photo_base64", base64).apply()
+    }
+
+    fun clearDeveloperPhoto() {
+        _developerPhotoBase64.value = ""
+        sharedPrefs.edit().remove("developer_photo_base64").apply()
+    }
+
     // --- Generation State ---
     private val _generationState = MutableStateFlow<GenerationState>(GenerationState.Idle)
     val generationState: StateFlow<GenerationState> = _generationState.asStateFlow()
