@@ -1,0 +1,6 @@
+{
+  "name": "QuizCard AI Study",
+  "description": "An educational AI study aid that parses PDFs and notes to generate local flashcards and quizzes using Gemini, complete with Leitner Spaced Repetition (SRS) and Text-to-Speech support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
